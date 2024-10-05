@@ -77,7 +77,48 @@ func decodeList(bString string, start int) (interface{}, int, error) {
 
 	}
 
-	return decodedList, currIdx+1, nil
+	return decodedList, currIdx + 1, nil
+}
+
+func decodeDict(bString string, start int) (map[string]interface{}, int, error) {
+	// d3:foo3:bar5:helloi52ee
+	dDict := make(map[string]interface{})
+	currIdx := start + 1
+	var key string
+	key = ""
+
+	if currIdx >= len(bString) {
+		return nil, currIdx, fmt.Errorf("bad bencoded dict")
+	}
+
+	for {
+		if currIdx >= len(bString) {
+			return nil, currIdx, fmt.Errorf("bad bencoded dict")
+		}
+		if bString[currIdx] == 'e' {
+			break
+		}
+
+		decodedVal, nextStartIdx, err := decodeBencode(bString, currIdx)
+		if err != nil {
+			return nil, currIdx, fmt.Errorf("bad bencoded dict")
+		}
+
+		if key == "" {
+			ok := true
+			key, ok = decodedVal.(string)
+			if !ok {
+				return nil, currIdx, fmt.Errorf("dict key is not a string")
+			}
+		} else {
+			dDict[key] = decodedVal
+			key = ""
+		}
+
+		currIdx = nextStartIdx
+	}
+
+	return dDict, currIdx + 1, nil
 }
 
 func decodeBencode(bencodedString string, start int) (interface{}, int, error) {
@@ -88,6 +129,9 @@ func decodeBencode(bencodedString string, start int) (interface{}, int, error) {
 		return decodeInt(bencodedString, start)
 	case bencodedString[start] == 'l':
 		return decodeList(bencodedString, start)
+	case bencodedString[start] == 'd':
+		return decodeDict(bencodedString, start)
+
 	default:
 		return "", len(bencodedString), fmt.Errorf("Only strings are supported at the moment")
 	}
