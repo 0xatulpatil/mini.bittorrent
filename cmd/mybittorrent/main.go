@@ -137,23 +137,59 @@ func decodeBencode(bencodedString string, start int) (interface{}, int, error) {
 	}
 }
 
+func command_decode() {
+	bencodedValue := os.Args[2]
+
+	decoded, _, err := decodeBencode(bencodedValue, 0)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	jsonOutput, _ := json.Marshal(decoded)
+	fmt.Println(string(jsonOutput))
+}
+
+func command_info() {
+	filePath := os.Args[2]
+
+	file, err := os.ReadFile(filePath)
+	if err != nil {
+		fmt.Println("Error parsing file")
+		os.Exit(1)
+	}
+	fileread := string(file)
+
+	var decBencode map[string]interface{}
+	db, _, err := decodeBencode(fileread, 0)
+	var ok bool
+	decBencode, ok = db.(map[string]interface{})
+	if !ok {
+		fmt.Println("conversion failed")
+	}
+
+	if err != nil {
+		fmt.Println("Error Decoding Bencoded file")
+		return
+	}
+	
+	torrInfo := decBencode["info"].(map[string]interface{})
+
+	fmt.Println("Tracker URL:", decBencode["announce"])
+	fmt.Println("Length:", torrInfo["length"])
+}
+
 func main() {
 	command := os.Args[1]
 
-	if command == "decode" {
-
-		bencodedValue := os.Args[2]
-
-		decoded, _, err := decodeBencode(bencodedValue, 0)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-
-		jsonOutput, _ := json.Marshal(decoded)
-		fmt.Println(string(jsonOutput))
-	} else {
-		fmt.Println("Unknown command: " + command)
+	switch {
+	case command == "decode":
+		command_decode()
+	case command == "info":
+		command_info()
+	default:
+		fmt.Println("Unknow command:", command)
 		os.Exit(1)
+
 	}
 }
