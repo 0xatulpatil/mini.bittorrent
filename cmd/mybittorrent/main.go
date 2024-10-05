@@ -100,8 +100,7 @@ func main() {
 
 		bencodedValue := os.Args[2]
 
-		decoded, s, err := decodeBencode(bencodedValue, 0)
-		fmt.Print(s)
+		decoded, _, err := decodeBencode(bencodedValue, 0)
 		if err != nil {
 			fmt.Println(err)
 			return
