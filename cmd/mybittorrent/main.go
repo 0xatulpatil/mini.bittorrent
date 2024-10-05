@@ -176,14 +176,13 @@ func command_info() {
 func main() {
 	command := os.Args[1]
 
-	switch {
-	case command == "decode":
+	switch command {
+	case "decode":
 		command_decode()
-	case command == "info":
+	case "info":
 		command_info()
 	default:
 		fmt.Println("Unknow command:", command)
 		os.Exit(1)
-
 	}
 }
