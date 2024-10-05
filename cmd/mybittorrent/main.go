@@ -160,19 +160,13 @@ func command_info() {
 	}
 	fileread := string(file)
 
-	var decBencode map[string]interface{}
 	db, _, err := decodeBencode(fileread, 0)
-	var ok bool
-	decBencode, ok = db.(map[string]interface{})
-	if !ok {
-		fmt.Println("conversion failed")
-	}
-
 	if err != nil {
 		fmt.Println("Error Decoding Bencoded file")
 		return
 	}
-	
+	decBencode, _ := db.(map[string]interface{})
+
 	torrInfo := decBencode["info"].(map[string]interface{})
 
 	fmt.Println("Tracker URL:", decBencode["announce"])
