@@ -51,7 +51,6 @@ func decodeInt(bString string, start int) (int, int, error) {
 }
 
 func decodeList(bString string, start int) (interface{}, int, error) {
-	// l4:hello3atuli3ee -> ["hello", "atul", 3]
 	decodedList := make([]interface{}, 0)
 	if start >= len(bString) {
 		return decodedList, start, fmt.Errorf("Invalid bencoded list")
@@ -70,7 +69,7 @@ func decodeList(bString string, start int) (interface{}, int, error) {
 
 		decodedVal, nextStartIdx, err := decodeBencode(bString, currIdx)
 		if err != nil {
-			return nil, start, err
+			return nil, currIdx, err
 		}
 		currIdx = nextStartIdx
 
@@ -78,7 +77,7 @@ func decodeList(bString string, start int) (interface{}, int, error) {
 
 	}
 
-	return decodedList, currIdx, nil
+	return decodedList, currIdx+1, nil
 }
 
 func decodeBencode(bencodedString string, start int) (interface{}, int, error) {
@@ -87,7 +86,7 @@ func decodeBencode(bencodedString string, start int) (interface{}, int, error) {
 		return decodeString(bencodedString, start)
 	case bencodedString[start] == 'i':
 		return decodeInt(bencodedString, start)
-	case bencodedString[0] == 'l':
+	case bencodedString[start] == 'l':
 		return decodeList(bencodedString, start)
 	default:
 		return "", len(bencodedString), fmt.Errorf("Only strings are supported at the moment")
@@ -101,7 +100,8 @@ func main() {
 
 		bencodedValue := os.Args[2]
 
-		decoded, _ , err := decodeBencode(bencodedValue, 0)
+		decoded, s, err := decodeBencode(bencodedValue, 0)
+		fmt.Print(s)
 		if err != nil {
 			fmt.Println(err)
 			return
