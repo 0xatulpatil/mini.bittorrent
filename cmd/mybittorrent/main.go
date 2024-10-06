@@ -182,12 +182,12 @@ func command_info() {
 
 	hasher := sha1.New()
 	hasher.Write([]byte(infoHashString))
-	sh1 := hasher.Sum(nil)
-	infoHashString = hex.EncodeToString(sh1)
 
 	fmt.Println("Tracker URL:", decBencode["announce"])
 	fmt.Println("Length:", torrInfo["length"])
-	fmt.Println("Info Hash:", infoHashString)
+	fmt.Println("Info Hash:", hex.EncodeToString(hasher.Sum(nil)))
+	fmt.Println("Piece Length:", torrInfo["piece length"])
+	fmt.Println("Piece Hashes:", torrInfo["pieces"])
 }
 
 func main() {
