@@ -1,129 +1,13 @@
 package main
 
 import (
-	"bytes"
-	"crypto/sha1"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
-	"strconv"
 	"unicode"
-
-	bencode "github.com/jackpal/bencode-go"
 )
-
-var _ = json.Marshal
-
-func decodeString(bString string, start int) (string, int, error) {
-	var firstColonIndex int
-
-	for i := start; i < len(bString); i++ {
-		if bString[i] == ':' {
-			firstColonIndex = i
-			break
-		}
-	}
-
-	lengthStr := bString[start:firstColonIndex]
-
-	lengthOfString, err := strconv.Atoi(lengthStr)
-	if err != nil {
-		return "", start, err
-	}
-
-	return bString[firstColonIndex+1 : firstColonIndex+1+lengthOfString], firstColonIndex + lengthOfString + 1, nil
-}
-
-func decodeInt(bString string, start int) (int, int, error) {
-	if start == len(bString) {
-		return start, 0, fmt.Errorf("Bad bencoded Int")
-	}
-
-	lastIdxOfInt := start
-
-	for lastIdxOfInt < len(bString) && bString[lastIdxOfInt] != 'e' {
-		lastIdxOfInt++
-	}
-	if lastIdxOfInt >= len(bString) || bString[lastIdxOfInt] != 'e' {
-		return start, 0, fmt.Errorf("Bad bencoded Int")
-	}
-
-	lastIdxOfInt++
-	dInt, err := strconv.Atoi(bString[start+1 : lastIdxOfInt-1])
-
-	return dInt, lastIdxOfInt, err
-}
-
-func decodeList(bString string, start int) (interface{}, int, error) {
-	decodedList := make([]interface{}, 0)
-	if start >= len(bString) {
-		return decodedList, start, fmt.Errorf("Invalid bencoded list")
-	}
-	currIdx := start
-	currIdx++
-
-	for {
-		if currIdx >= len(bString) {
-			return nil, currIdx, fmt.Errorf("bad bencoded list")
-		}
-
-		if bString[currIdx] == 'e' {
-			break
-		}
-
-		decodedVal, nextStartIdx, err := decodeBencode(bString, currIdx)
-		if err != nil {
-			return nil, currIdx, err
-		}
-		currIdx = nextStartIdx
-
-		decodedList = append(decodedList, decodedVal)
-	}
-
-	return decodedList, currIdx + 1, nil
-}
-
-func decodeDict(bString string, start int) (map[string]interface{}, int, error) {
-	// d3:foo3:bar5:helloi52ee
-	dDict := make(map[string]interface{})
-	currIdx := start + 1
-	var key string
-	key = ""
-
-	if currIdx >= len(bString) {
-		return nil, currIdx, fmt.Errorf("bad bencoded dict")
-	}
-
-	for {
-		if currIdx >= len(bString) {
-			return nil, currIdx, fmt.Errorf("bad bencoded dict")
-		}
-		if bString[currIdx] == 'e' {
-			break
-		}
-
-		decodedVal, nextStartIdx, err := decodeBencode(bString, currIdx)
-		if err != nil {
-			return nil, currIdx, fmt.Errorf("bad bencoded dict")
-		}
-
-		if key == "" {
-			ok := true
-			key, ok = decodedVal.(string)
-			if !ok {
-				return nil, currIdx, fmt.Errorf("dict key is not a string")
-			}
-		} else {
-			dDict[key] = decodedVal
-			key = ""
-		}
-
-		currIdx = nextStartIdx
-	}
-
-	return dDict, currIdx + 1, nil
-}
 
 func decodeBencode(bencodedString string, start int) (interface{}, int, error) {
 	switch {
@@ -155,39 +39,43 @@ func command_decode() {
 }
 
 func command_info() {
-	filePath := os.Args[2]
-
-	file, err := os.ReadFile(filePath)
-	if err != nil {
-		fmt.Println("Error parsing file")
-		os.Exit(1)
-	}
-	fileread := string(file)
-
-	db, _, err := decodeBencode(fileread, 0)
-	if err != nil {
-		fmt.Println("Error Decoding Bencoded file")
-		return
-	}
-	decBencode, _ := db.(map[string]interface{})
+	decBencode, _ := readTorrentFile(os.Args[2])
 	torrInfo := decBencode["info"].(map[string]interface{})
-
-	var infoHashReader bytes.Buffer
-	err = bencode.Marshal(&infoHashReader, torrInfo)
-	if err != nil {
-		fmt.Print(err)
-		return
-	}
-	infoHashString := infoHashReader.String()
-
-	hasher := sha1.New()
-	hasher.Write([]byte(infoHashString))
+	infoHashBytes, _ := extractInfoHash(torrInfo)
+	infoHashString := hex.EncodeToString(infoHashBytes)
 
 	fmt.Println("Tracker URL:", decBencode["announce"])
 	fmt.Println("Length:", torrInfo["length"])
-	fmt.Println("Info Hash:", hex.EncodeToString(hasher.Sum(nil)))
+	fmt.Println("Info Hash:", infoHashString)
 	fmt.Println("Piece Length:", torrInfo["piece length"])
 	fmt.Println("Piece Hashes:", hex.EncodeToString([]byte(torrInfo["pieces"].(string))))
+}
+
+func command_peer() {
+	decBencode, err := readTorrentFile(os.Args[2])
+	if err != nil {
+		fmt.Println("Error decoding torrent file")
+	}
+	trackerURL := decBencode["announce"]
+	torrInfo := decBencode["info"].(map[string]interface{})
+	infoHashBytes, _ := extractInfoHash(torrInfo)
+
+	trackerResp, err := getTrackerInfo(trackerURL.(string), infoHashBytes, "00112233445566778899", 6881, 0, 0, torrInfo["length"].(int), 1)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	dresp, _, err := decodeBencode(trackerResp, 0)
+	decodedTrackerResp := dresp.(map[string]interface{})
+	peerBytes := []byte(decodedTrackerResp["peers"].(string))
+	if len(peerBytes)%6 != 0 {
+		fmt.Println("Bad Peer received")
+		return
+	}
+
+	for i := 0; i < len(peerBytes); i += 6 {
+		fmt.Println(fmt.Sprintf("%d.%d.%d.%d.%d", peerBytes[i], peerBytes[i+1], peerBytes[i+2], peerBytes[i+3], binary.BigEndian.Uint16(peerBytes[i+4:i+6])))
+	}
 }
 
 func main() {
@@ -198,6 +86,8 @@ func main() {
 		command_decode()
 	case "info":
 		command_info()
+	case "peer":
+		command_peer()
 	default:
 		fmt.Println("Unknow command:", command)
 		os.Exit(1)
