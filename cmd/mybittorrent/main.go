@@ -1,11 +1,16 @@
 package main
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
 	"unicode"
+
+	bencode "github.com/jackpal/bencode-go"
 )
 
 var _ = json.Marshal
@@ -74,7 +79,6 @@ func decodeList(bString string, start int) (interface{}, int, error) {
 		currIdx = nextStartIdx
 
 		decodedList = append(decodedList, decodedVal)
-
 	}
 
 	return decodedList, currIdx + 1, nil
@@ -166,11 +170,24 @@ func command_info() {
 		return
 	}
 	decBencode, _ := db.(map[string]interface{})
-
 	torrInfo := decBencode["info"].(map[string]interface{})
 
-	fmt.Println("Tracker URL:", decBencode["announce"])
+	var infoHashReader bytes.Buffer
+	err = bencode.Marshal(&infoHashReader, torrInfo)
+	if err != nil {
+		fmt.Print(err)
+		return
+	}
+	infoHashString := infoHashReader.String()
+
+	hasher := sha256.New()
+	hasher.Write([]byte(infoHashString))
+	h256 := hasher.Sum(nil)
+	infoHashString = hex.EncodeToString(h256)
+
+	fmt.Println("Tracker URL:", torrInfo["announce"])
 	fmt.Println("Length:", torrInfo["length"])
+	fmt.Println("Info Hash:", infoHashString)
 }
 
 func main() {
