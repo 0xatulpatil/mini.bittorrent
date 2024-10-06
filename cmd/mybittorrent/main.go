@@ -86,7 +86,7 @@ func main() {
 		command_decode()
 	case "info":
 		command_info()
-	case "peer":
+	case "peers":
 		command_peer()
 	default:
 		fmt.Println("Unknow command:", command)
