@@ -2,7 +2,7 @@ package main
 
 import (
 	"bytes"
-	"crypto/sha256"
+	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -180,12 +180,12 @@ func command_info() {
 	}
 	infoHashString := infoHashReader.String()
 
-	hasher := sha256.New()
+	hasher := sha1.New()
 	hasher.Write([]byte(infoHashString))
-	h256 := hasher.Sum(nil)
-	infoHashString = hex.EncodeToString(h256)
+	sh1 := hasher.Sum(nil)
+	infoHashString = hex.EncodeToString(sh1)
 
-	fmt.Println("Tracker URL:", torrInfo["announce"])
+	fmt.Println("Tracker URL:", decBencode["announce"])
 	fmt.Println("Length:", torrInfo["length"])
 	fmt.Println("Info Hash:", infoHashString)
 }
