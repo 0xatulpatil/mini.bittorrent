@@ -187,7 +187,7 @@ func command_info() {
 	fmt.Println("Length:", torrInfo["length"])
 	fmt.Println("Info Hash:", hex.EncodeToString(hasher.Sum(nil)))
 	fmt.Println("Piece Length:", torrInfo["piece length"])
-	fmt.Println("Piece Hashes:", torrInfo["pieces"])
+	fmt.Println("Piece Hashes:", hex.EncodeToString([]byte(torrInfo["pieces"].(string))))
 }
 
 func main() {
