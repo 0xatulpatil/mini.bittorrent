@@ -74,7 +74,7 @@ func command_peer() {
 	}
 
 	for i := 0; i < len(peerBytes); i += 6 {
-		fmt.Printf("%d.%d.%d.%d.%d", peerBytes[i], peerBytes[i+1], peerBytes[i+2], peerBytes[i+3], binary.BigEndian.Uint16(peerBytes[i+4:i+6]), "/n")
+		fmt.Printf("%d.%d.%d.%d.%d%s", peerBytes[i], peerBytes[i+1], peerBytes[i+2], peerBytes[i+3], binary.BigEndian.Uint16(peerBytes[i+4:i+6]), "/n")
 	}
 }
 
