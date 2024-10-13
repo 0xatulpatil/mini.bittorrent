@@ -312,7 +312,7 @@ func command_handshake() {
 		return
 	}
 
-	fmt.Println("Peer ID: ", hex.EncodeToString(resp[48:]))
+	fmt.Println("Peer ID:", hex.EncodeToString(resp[48:]))
 	return
 }
 
