@@ -3,9 +3,10 @@ package main
 import (
 	"bytes"
 	"crypto/sha1"
-	// "encoding/hex"
+	"encoding/binary"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -189,4 +190,70 @@ func getTrackerInfo(trackerBaseURL string,
 	}
 
 	return string(respBody), nil
+}
+
+func getPeers(filePath string) []string {
+	decBencode, err := readTorrentFile(filePath)
+	if err != nil {
+		fmt.Println("Error decoding torrent file")
+	}
+	trackerURL := decBencode["announce"]
+	torrInfo := decBencode["info"].(map[string]interface{})
+	infoHashBytes, _ := extractInfoHash(torrInfo)
+
+	trackerResp, err := getTrackerInfo(trackerURL.(string), infoHashBytes, "00112233445566778899", 6881, 0, 0, torrInfo["length"].(int), 1)
+	if err != nil {
+		fmt.Println(err)
+		return nil
+	}
+	dresp, _, err := decodeBencode(trackerResp, 0)
+	decodedTrackerResp := dresp.(map[string]interface{})
+	peerBytes := []byte(decodedTrackerResp["peers"].(string))
+	if len(peerBytes)%6 != 0 {
+		fmt.Println("Bad Peer received")
+		return nil
+	}
+
+	peers := make([]string, 0)
+
+	for i := 0; i < len(peerBytes); i += 6 {
+		peers = append(peers, fmt.Sprintf("%d.%d.%d.%d:%d", peerBytes[i], peerBytes[i+1], peerBytes[i+2], peerBytes[i+3], binary.BigEndian.Uint16(peerBytes[i+4:i+6])))
+	}
+
+	return peers
+}
+
+func handshakePeer(ip string, port string, infoHash string) ([]byte, error) {
+	address := fmt.Sprintf("%s:%s", ip, port)
+	conn, err := net.Dial("tcp", address)
+	if err != nil {
+		fmt.Printf("Error connecting to address %s", address)
+	}
+
+	defer conn.Close()
+
+	var handshakeMsg []byte
+	prtlen := byte(19)
+	protoMsg := []byte("BitTorrent protocol")
+	protoReservedBytes := make([]byte, 8)
+	protoPeerId := []byte{0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9}
+
+	handshakeMsg = append([]byte{prtlen}, protoMsg...)
+	handshakeMsg = append(handshakeMsg, protoReservedBytes...)
+	handshakeMsg = append(handshakeMsg, []byte(infoHash)...)
+	handshakeMsg = append(handshakeMsg, protoPeerId...)
+	_, err = conn.Write(handshakeMsg)
+	if err != nil {
+		fmt.Println("Error while writing to TCP connection")
+		return nil, err
+	}
+
+	replyHandshake := make([]byte, 68)
+	_, err = conn.Read(replyHandshake)
+	if err != nil {
+		fmt.Println("failed to read:", err)
+		return nil, err
+	}
+
+	return replyHandshake, nil
 }
