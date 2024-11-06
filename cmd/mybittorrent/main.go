@@ -19,6 +19,14 @@ import (
 	"github.com/jackpal/bencode-go"
 )
 
+type PeerMessage struct {
+	lengthPrefix uint32
+	id           uint8
+	index        uint32
+	begin        uint32
+	length       uint32
+}
+
 func readTorrentFile(filePath string) (map[string]interface{}, error) {
 	file, err := os.ReadFile(filePath)
 	if err != nil {
@@ -227,7 +235,7 @@ func getPeers(filePath string) []string {
 	return peers
 }
 
-func handshakePeer(ip string, port string, infoHash string) ([]byte, error) {
+func handshakePeer(ip string, port string, infoHash string) (net.Conn, []byte, error) {
 	address := fmt.Sprintf("%s:%s", ip, port)
 	conn, err := net.Dial("tcp", address)
 	if err != nil {
@@ -249,17 +257,31 @@ func handshakePeer(ip string, port string, infoHash string) ([]byte, error) {
 	_, err = conn.Write(handshakeMsg)
 	if err != nil {
 		fmt.Println("Error while writing to TCP connection")
-		return nil, err
+		return nil, nil, err
 	}
 
 	replyHandshake := make([]byte, 68)
 	_, err = conn.Read(replyHandshake)
 	if err != nil {
 		fmt.Println("failed to read:", err)
-		return nil, err
+		return nil, nil, err
 	}
 
-	return replyHandshake, nil
+	return conn, replyHandshake, nil
+}
+
+func downloadPiece(conn net.Conn) ([]byte, error) {
+	buf := make([]byte, 4)
+	_, err := conn.Read(buf)
+	if err != nil {
+		fmt.Println("failed to read1:", err)
+		return nil, err
+	}
+	fmt.Println("Bitfield MSG", buf)
+	fmt.Println("Bitfield bg edng", binary.BigEndian.Uint32(buf))
+	// peerMessage := PeerMessage{}
+
+	return nil, nil
 }
 
 func command_decode() {
@@ -306,7 +328,7 @@ func command_handshake() {
 	torrInfo := decBencode["info"].(map[string]interface{})
 	infoHashBytes, _ := extractInfoHash(torrInfo)
 
-	resp, err := handshakePeer(clientIp, clientPort, string(infoHashBytes))
+	_, resp, err := handshakePeer(clientIp, clientPort, string(infoHashBytes))
 	if err != nil {
 		fmt.Printf("Error while estrablishing handshake with peer %s:%s", clientIp, clientPort)
 		return
@@ -314,6 +336,30 @@ func command_handshake() {
 
 	fmt.Println("Peer ID:", hex.EncodeToString(resp[48:]))
 	return
+}
+
+func command_download_piece() {
+	// flag := os.Args[2]
+	// downloadPath := os.Args[3]
+	filePath := os.Args[4]
+
+	peers := getPeers(filePath)
+	peer := strings.Split(peers[0], ":")
+	clientIp, clientPort := peer[0], peer[1]
+
+	decBencode, _ := readTorrentFile(filePath)
+	torrInfo := decBencode["info"].(map[string]interface{})
+	infoHashBytes, _ := extractInfoHash(torrInfo)
+
+	conn, _, err := handshakePeer(clientIp, clientPort, string(infoHashBytes))
+	if err != nil {
+		fmt.Printf("Error while estrablishing handshake with peer %s:%s", clientIp, clientPort)
+		return
+	}
+
+	resp, _ := downloadPiece(conn)
+
+	fmt.Println("resp", resp)
 }
 
 func decodeBencode(bencodedString string, start int) (interface{}, int, error) {
@@ -344,6 +390,8 @@ func main() {
 		command_peer()
 	case "handshake":
 		command_handshake()
+	case "download_piece":
+		command_download_piece()
 	default:
 		fmt.Println("Unknow command:", command)
 		os.Exit(1)
